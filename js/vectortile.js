@@ -25,7 +25,6 @@ function VectorTile(buffer, end) {
             var face = this.readFace();
             this.faces[face.family + ' ' + face.style] = face;
         } else {
-            // console.warn('skipping tile tag ' + tag);
             buffer.skip(val);
         }
     }

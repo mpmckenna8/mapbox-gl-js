@@ -109,7 +109,7 @@ App.prototype._setupMap = function() {
             type: 'vector',
             id: 'streets',
             urls: ['/gl/tiles/{z}-{x}-{y}.vector.pbf'],
-            zooms: [0, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14]
+            zooms: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
         }],
         maxZoom: 20,
         zoom: 15,
