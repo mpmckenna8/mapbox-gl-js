@@ -87,7 +87,7 @@ var style_json = {
             "type": "point"
         },
         "restaurant_poi": {
-            "layer": "poi_label", "field": "maki", "value": "embassy",
+            "layer": "poi_label", "field": "maki", "value": "restaurant",
             "type": "point"
         },
         "road_markers": {
