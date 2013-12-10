@@ -5,12 +5,13 @@ var util = require('../util/util.js');
 var evented = require('../lib/evented.js');
 
 var Style = require('../style/style.js');
+var AnimationLoop = require('../style/animationloop.js');
 var GLPainter = require('../render/painter.js');
 
 var Transform = require('./transform.js');
 var Hash = require('./hash.js');
-var Interaction = require('./interaction.js');
-var Layer = require('./layer.js');
+var Handlers = require('./handlers.js');
+var Datasource = require('./datasource.js');
 
 module.exports = Map;
 function Map(config) {
@@ -19,8 +20,11 @@ function Map(config) {
     this.uuid = 1;
     this.tiles = [];
 
+    this.animationLoop = new AnimationLoop();
+
     this._rerender = this._rerender.bind(this);
     this._updateBuckets = this._updateBuckets.bind(this);
+    this.updateSpriteCSS = this.updateSpriteCSS.bind(this);
 
     this.transform = new Transform(this.tileSize);
 
@@ -37,18 +41,18 @@ function Map(config) {
 
     this._setupPainter();
     this._setupContextHandler();
-    this._setupEvents();
-    this._setupDispatcher();
+
+    this.handlers = new Handlers(this);
+    this.dispatcher = new Dispatcher(4, this);
 
     this.dirty = false;
 
-    this.layers = [];
+    this.datasources = {};
 
-    var map = this;
-    for (var i = 0; config.layers && i < config.layers.length; i++) {
-        var layer = new Layer(config.layers[i], map);
-        map.fire('layer.add', [layer]);
-        map.layers.push(layer);
+    for (var id in (config.datasources || {})) {
+        var datasource = new Datasource(config.datasources[id], this);
+        this.fire('datasource.add', [datasource]);
+        this.datasources[id] = datasource;
     }
 
     this.resize();
@@ -57,7 +61,7 @@ function Map(config) {
         this.hash.onhash();
     }
 
-    this.switchStyle(config.style);
+    this.setStyle(config.style);
 }
 
 Map.prototype = {
@@ -122,16 +126,47 @@ Map.prototype.zoomTo = function(zoom, duration, center) {
         center = { x: rect.width / 2, y: rect.height / 2 };
     }
 
+    var easing;
+
+    if (this.ease) {
+        var ease = this.ease;
+
+        var t = ((new Date()).getTime() - ease.start) / ease.duration;
+        var speed = ease.easing(t + 0.01) - ease.easing(t);
+
+        // Quick hack to make new bezier that is continuous with last
+        var x = 0.27 / Math.sqrt(speed * speed + 0.0001) * 0.01;
+        var y = Math.sqrt(0.27 * 0.27 - x * x);
+        easing = util.bezier(x, y,0.25, 1);
+
+    } else {
+        easing = util.ease;
+    }
+
+
     var map = this;
     var from = this.transform.scale,
           to = Math.pow(2, zoom);
+
+    // store information on current easing
+    this.ease = {
+        from: from,
+        to: to,
+        start: (new Date()).getTime(),
+        duration: duration,
+        easing: easing
+    };
+
     this.cancelTransform = util.timed(function(t) {
-        var scale = util.interp(from, to, util.easeCubicInOut(t));
+        var scale = util.interp(from, to, easing(t));
         map.transform.zoomAroundTo(scale, center);
         map.fire('zoom', [{ scale: scale }]);
+        map.style.addClass(':zooming');
         map._updateStyle();
         map.update();
         if (t === 1) map.fire('move');
+        if (t === 1) map.style.removeClass(':zooming');
+        if (t === 1) delete map.ease;
     }, duration);
 };
 
@@ -154,7 +189,6 @@ Map.prototype.setPosition = function(zoom, lat, lon, angle) {
     this.transform.zoom = zoom - 1;
     this.transform.lat = lat;
     this.transform.lon = lon;
-    this.fire('rotation');
     return this;
 };
 
@@ -165,9 +199,7 @@ Map.prototype.setPosition = function(zoom, lat, lon, angle) {
  * @returns {Layer} or null
  */
 Map.prototype.getLayer = function(id) {
-    return this.layers.filter(function(l) {
-        return l.id === id;
-    })[0];
+    return this.datasources[id];
 };
 
 /*
@@ -224,7 +256,7 @@ Map.prototype.resetNorth = function() {
     var start = map.transform.angle;
     map.rotating = true;
     util.timed(function(t) {
-        map.setAngle(center, util.interp(start, 0, util.easeCubicInOut(t)));
+        map.setAngle(center, util.interp(start, 0, util.ease(t)));
         if (t === 1) {
             map.rotating = false;
         }
@@ -279,8 +311,9 @@ Map.prototype._setupPainter = function() {
     //this.canvas.loseContextInNCalls(1000);
     var gl = this.canvas.getContext("experimental-webgl", {
         antialias: false,
-        alpha: false,
-        stencil: true
+        alpha: true,
+        stencil: true,
+        depth: false
     });
 
     if (!gl) {
@@ -316,83 +349,6 @@ Map.prototype._setupContextHandler = function() {
     }, false);
 };
 
-// Adds pan/zoom handlers and triggers the necessary events
-Map.prototype._setupEvents = function() {
-    var map = this;
-    var rotateEnd, zoomEnd;
-
-    this.interaction = new Interaction(this.container)
-        .on('click', function(x, y) {
-            map.fire('click', [x, y]);
-        })
-        .on('hover', function(x, y) {
-            map.fire('hover', [x, y]);
-        })
-        .on('resize', function() {
-            if (map.cancelTransform) { map.cancelTransform(); }
-            map.resize();
-            map.update();
-        })
-        .on('pan', function(x, y) {
-            if (map.cancelTransform) { map.cancelTransform(); }
-            map.transform.panBy(x, y);
-            map.fire('move');
-            map.update();
-        })
-        .on('panend', function(x, y) {
-            if (map.cancelTransform) { map.cancelTransform(); }
-            map.cancelTransform = util.timed(function(t) {
-                map.transform.panBy(Math.round(x * (1 - t)), Math.round(y * (1 - t)));
-                map._updateStyle();
-                map.update();
-            }, 500);
-        })
-        .on('zoom', function(delta, x, y) {
-            if (map.cancelTransform) { map.cancelTransform(); }
-            // Scale by sigmoid of scroll wheel delta.
-            var scale = 2 / (1 + Math.exp(-Math.abs(delta / 100) / 4));
-            if (delta < 0 && scale !== 0) scale = 1 / scale;
-            if (delta === Infinity || delta === -Infinity) {
-                map.scaleTo(map.transform.scale * scale, 200, { x: x, y: y });
-            } else {
-                map.scaleTo(map.transform.scale * scale, 0, { x: x, y: y });
-            }
-
-            map.zooming = true;
-            window.clearTimeout(zoomEnd);
-            zoomEnd = window.setTimeout(function() {
-                map.zooming = false;
-                map._rerender();
-            }, 200);
-        })
-        .on('rotate', function(beginning, start, end) {
-            var rect = map.container.getBoundingClientRect();
-            var center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, // Center of rotation
-                beginningToCenter = util.vectorSub(beginning, center),
-                beginningToCenterDist = util.vectorMag(beginningToCenter);
-
-            // If the first click was too close to the center, move the center of rotation by 200 pixels
-            // in the direction of the click.
-            if (beginningToCenterDist < 200) {
-                center = util.vectorAdd(beginning, util.rotate(Math.atan2(beginningToCenter.y, beginningToCenter.x), { x: -200, y: 0 }));
-            }
-
-            map.fire('move');
-            map.setAngle(center, map.transform.angle + util.angleBetween(util.vectorSub(start, center), util.vectorSub(end, center)));
-
-            map.rotating = true;
-            window.clearTimeout(rotateEnd);
-            rotateEnd = window.setTimeout(function() {
-                map.rotating = false;
-                map._rerender();
-            }, 200);
-        });
-};
-
-Map.prototype._setupDispatcher = function() {
-    this.dispatcher = new Dispatcher(4, this);
-};
-
 Map.prototype.addTile = function(tile) {
     if (this.tiles.indexOf(tile) < 0) {
         this.tiles.push(tile);
@@ -412,13 +368,13 @@ Map.prototype.findTile = function(id) {
             return this.tiles[i];
         }
     }
-}
+};
 
 Map.prototype.featuresAt = function(x, y, params, callback) {
     var features = [];
     var error = null;
-    util.async_each(this.layers, function(layer, callback) {
-        layer.featuresAt(x, y, params, function(err, result) {
+    util.async_each(util.values(this.datasources), function(datasource, callback) {
+        datasource.featuresAt(x, y, params, function(err, result) {
             if (result) features = features.concat(result);
             if (err) error = err;
             callback();
@@ -473,47 +429,55 @@ Map.prototype._rerender = function() {
     }
 };
 
-Map.prototype.switchStyle = function(style) {
+Map.prototype.setStyle = function(style) {
+    var map = this;
+
     if (this.style) {
         this.style.off('change', this._rerender);
+        this.style.off('change:sprite', this._rerender);
         this.style.off('buckets', this._updateBuckets);
     }
 
-    if (!(style instanceof Style)) {
-        style = new Style(style);
-    }
-    this.style = style;
 
-    var map = this;
-    this.style.on('change:sprite', function() {
-        if (!map.spriteCSS) {
-            map.spriteCSS = document.createElement('style');
-            map.spriteCSS.type = 'text/css';
-            document.head.appendChild(map.spriteCSS);
-        }
-        map.spriteCSS.innerHTML = map.style.sprite.cssRules();
-    });
+    if (style instanceof Style) {
+        this.style = style;
+    } else {
+        this.style = new Style(style, this.animationLoop);
+    }
+
     this.style.on('change', function() {
         map._updateStyle();
         map._rerender();
     });
-    this.style.on('buckets', this._updateBuckets);
+
+    this.style.on('change:buckets', this._updateBuckets);
+
+    this.style.on('change:sprite', this.updateSpriteCSS);
 
     this._updateBuckets();
     this._updateStyle();
     map.update();
 };
 
+Map.prototype.updateSpriteCSS = function() {
+    if (!this.spriteCSS) {
+        this.spriteCSS = document.createElement('style');
+        this.spriteCSS.type = 'text/css';
+        document.head.appendChild(this.spriteCSS);
+    }
+    this.spriteCSS.innerHTML = this.style.sprite.cssRules();
+};
+
 Map.prototype._updateStyle = function() {
     if (this.style) {
-        this.style.zoom(this.transform.z);
+        this.style.recalculate(this.transform.z);
     }
 };
 
 Map.prototype._updateBuckets = function() {
     // Transfer a stripped down version of the style to the workers. They only
     // need the bucket information to know what features to extract from the tile.
-    this.dispatcher.broadcast('set buckets', this.style.presentationBuckets());
+    this.dispatcher.broadcast('set buckets', this.style.stylesheet.buckets);
 
     // clears all tiles to recalculate geometries (for changes to linecaps, linejoins, ...)
     for (var t in this.tiles) {
@@ -524,9 +488,9 @@ Map.prototype._updateBuckets = function() {
 };
 
 Map.prototype.update = function() {
-    this.layers.forEach(function(layer) {
-        layer.update();
-    });
+    for (var id in this.datasources) {
+        this.datasources[id].update();
+    }
     this._rerender();
 };
 
@@ -535,14 +499,31 @@ Map.prototype.update = function() {
 Map.prototype.render = function() {
     this.dirty = false;
 
-    this.painter.clear(this.style.background.gl());
+    var painter = this.painter;
 
-    this.layers.forEach(function(layer) {
-        layer.render();
+    this.painter.clear();
+
+    var structure = this.style.stylesheet.structure;
+    var layerIndex = structure - 1;
+
+    var map = this;
+    this.style.layerGroups.forEach(function(g) {
+        var ds = map.datasources[g.datasource];
+        if (ds) {
+            ds.render(g);
+
+        } else {
+            console.warn('missing datasource', g.datasource);
+        }
     });
 
+    if (this.style.computed.background && this.style.computed.background.color) {
+        this.painter.drawBackground(this.style.computed.background.color, true);
+    }
 
-    if (this._repaint) {
+
+    if (this._repaint || !this.animationLoop.stopped()) {
+        this._updateStyle();
         this._rerender();
     }
 };

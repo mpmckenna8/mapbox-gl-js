@@ -36,7 +36,7 @@ Layer.prototype.update = function() {
     this._updateTiles();
 };
 
-Layer.prototype.render = function() {
+Layer.prototype.render = function(layers) {
     // Iteratively paint every tile.
     if (!this.enabled) return;
     var order = Object.keys(this.tiles);
@@ -45,7 +45,7 @@ Layer.prototype.render = function() {
         var id = order[i];
         var tile = this.tiles[id];
         if (tile.loaded) {
-            this._renderTile(tile, id);
+            this._renderTile(tile, id, layers);
         }
     }
 };
@@ -195,14 +195,14 @@ Layer.prototype._getCoveringTiles = function() {
  * @param {Number} id
  * @param {Object} style
  */
-Layer.prototype._renderTile = function(tile, id, style) {
+Layer.prototype._renderTile = function(tile, id, layers) {
     var pos = Tile.fromID(id);
     var z = pos.z, x = pos.x, y = pos.y, w = pos.w;
     x += w * (1 << z);
 
     this.painter.viewport(z, x, y, this.map.transform, this.map.transform.size, this.pixelRatio);
 
-    var result = this.painter[this.type === 'raster' ? 'drawRaster' : 'draw'](tile, this.map.style, {
+    var result = this.painter[this.type === 'raster' ? 'drawRaster' : 'draw'](tile, this.map.style, layers, {
         z: z, x: x, y: y,
         debug: this.map.debug,
         antialiasing: this.map.antialiasing,
@@ -210,10 +210,6 @@ Layer.prototype._renderTile = function(tile, id, style) {
         rotating: this.map.rotating,
         zooming: this.map.zooming
     });
-
-    if (result.redraw) {
-        this.map._rerender();
-    }
 };
 
 // Removes tiles that are outside the viewport and adds new tiles that are inside
@@ -231,10 +227,14 @@ Layer.prototype._updateTiles = function() {
         i,
         id;
 
-
     // Determine the overzooming/underzooming amounts.
-    var maxCoveringZoom = this._childZoomLevel(zoom);
     var minCoveringZoom = Math.max(this.minTileZoom, zoom - 10);
+    var maxCoveringZoom = zoom;
+    while (maxCoveringZoom > zoom - 3) {
+        var level = this._childZoomLevel(maxCoveringZoom);
+        if (level === null) break;
+        else maxCoveringZoom = level;
+    }
 
     // Add every tile, and add parent/child tiles if they are not yet loaded.
     for (i = 0; i < required.length; i++) {
@@ -270,9 +270,10 @@ Layer.prototype._updateTiles = function() {
             }
         }
 
+
         // Go down for max 1 zoom levels to find child tiles.
         z = missingZoom;
-        while (z < maxCoveringZoom) {
+        while (z <= maxCoveringZoom && z !== null) {
             z = this._childZoomLevel(z);
 
             // Go through the MRU cache and try to find existing tiles that are
@@ -311,7 +312,6 @@ Layer.prototype._updateTiles = function() {
 
     var existing = Object.keys(this.tiles).map(parseFloat),
         remove = util.difference(existing, required);
-
 
     for (i = 0; i < remove.length; i++) {
         id = remove[i];
@@ -452,5 +452,5 @@ Layer.prototype._scanSpans = function(e0, e1, ymin, ymax, scanLine) {
 };
 
 Layer.prototype._z_order = function(a, b) {
-    return (a % 32) - (b % 32);
+    return (b % 32) - (a % 32);
 };

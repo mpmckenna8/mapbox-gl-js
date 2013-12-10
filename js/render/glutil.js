@@ -2,6 +2,8 @@
 
 var shaders = require('./shaders.js');
 
+var WebGLRenderingContext = window.WebGLRenderingContext;
+
 if (WebGLRenderingContext) {
     WebGLRenderingContext.prototype.getShader = function(name, type) {
         var kind = type == this.FRAGMENT_SHADER ? 'fragment' : 'vertex';
@@ -37,8 +39,8 @@ if (WebGLRenderingContext) {
                 shader[attributes[i]] = this.getAttribLocation(shader.program, attributes[i]);
                 shader.attributes.push(shader[attributes[i]]);
             }
-            for (var i = 0; i < uniforms.length; i++) {
-                shader[uniforms[i]] = this.getUniformLocation(shader.program, uniforms[i]);
+            for (var k = 0; k < uniforms.length; k++) {
+                shader[uniforms[k]] = this.getUniformLocation(shader.program, uniforms[k]);
             }
         }
 
@@ -47,8 +49,8 @@ if (WebGLRenderingContext) {
 
     // Switches to a different shader program.
     WebGLRenderingContext.prototype.switchShader = function(shader, posMatrix, exMatrix) {
-        if (!exMatrix || !posMatrix) {
-            console.trace('exMatrix/posMatrix does not have required argument');
+        if (!posMatrix) {
+            console.trace('posMatrix does not have required argument');
         }
 
         if (this.currentShader !== shader) {

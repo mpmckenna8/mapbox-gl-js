@@ -1,7 +1,8 @@
 'use strict';
 
-var VertexBuffer = require('../geometry/vertexbuffer.js');
-var FillBuffer = require('../geometry/fillbuffer.js');
+var LineVertexBuffer = require('../geometry/linevertexbuffer.js');
+var FillVertexBuffer = require('../geometry/fillvertexbuffer.js');
+var FillElementsBuffer = require('../geometry/fillelementsbuffer.js');
 var GlyphVertexBuffer = require('../geometry/glyphvertexbuffer.js');
 
 var glmatrix = require('../lib/glmatrix.js');
@@ -56,8 +57,8 @@ Tile.prototype._load = function() {
 // };
 
 Tile.prototype.positionAt = function(id, clickX, clickY) {
-    var pos = Tile.fromID(id);
-    var z = pos.z, x = pos.x, y = pos.y, w = pos.w;
+    var tilePos = Tile.fromID(id);
+    var z = tilePos.z, x = tilePos.x, y = tilePos.y, w = tilePos.w;
     x += w * (1 << z);
 
     // Calculate the transformation matrix for this tile.
@@ -109,10 +110,11 @@ Tile.prototype.onTileLoad = function(data) {
     this.layers = data.layers;
     this.stats = data.stats;
 
-    this.geometry.glyph = new GlyphVertexBuffer(this.geometry.glyph);
-    this.geometry.buffers.forEach(function(d) {
-        d.vertex = new VertexBuffer(d.vertex);
-        d.fill = new FillBuffer(d.fill);
+    this.geometry.glyphVertex = new GlyphVertexBuffer(this.geometry.glyphVertex);
+    this.geometry.lineVertex = new LineVertexBuffer(this.geometry.lineVertex);
+    this.geometry.fillBuffers.forEach(function(d) {
+        d.vertex = new FillVertexBuffer(d.vertex);
+        d.elements = new FillElementsBuffer(d.elements);
     });
 
     this.loaded = true;

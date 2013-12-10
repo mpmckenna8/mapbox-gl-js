@@ -1,3 +1,5 @@
+'use strict';
+
 var util = llmr.util;
 
 var Dropdown = require('./dropdown.js');
@@ -7,14 +9,12 @@ var LayerView = require('./layerview.js');
 var defaultStyle = require('./defaultstyle.js');
 
 module.exports = App;
-function App(root) {
-    var app = this;
-
+function App() {
     this.layerViews = [];
 
+    this._setupMap();
     this._setupStyleDropdown();
     this._setupAddData();
-    this._setupMap();
     this._setupLayers();
     this._setupXRay();
 }
@@ -27,17 +27,17 @@ App.prototype._setupXRay = function() {
 
         llmr.util.timed(function(t) {
             var opacity = llmr.util.interp(from, to, util.easeCubicInOut(t));
-            if (app.xRayLayer) {
-                app.xRayLayer.setOpacity(opacity);
-                app.style.fire('change');
+            if (app.style.getDefaultClass().layers.__xray__) {
+                app.style.getDefaultClass().layers.__xray__.opacity = opacity;
+                app.style.cascade();
             }
             $('#xray').val(opacity);
         }, 500);
     });
     $('#xray').change(function() {
-        if (app.xRayLayer) {
-            app.xRayLayer.setOpacity(+this.value);
-            app.style.fire('change');
+        if (app.style.getDefaultClass().layers.__xray__) {
+            app.style.getDefaultClass().layers.__xray__.opacity = +this.value;
+            app.style.cascade();
         }
     });
 };
@@ -48,31 +48,31 @@ App.prototype._setupStyleDropdown = function() {
 
     var dropdown = this.dropdown = new Dropdown($('#styles'));
 
-    $("#new-style-template").dialog({
+    $('#new-style-template').dialog({
         autoOpen: false,
         modal: true,
         draggable: false,
-        title: "Create New Style",
+        title: 'Create New Style',
         width: 350,
         height: 120,
-        buttons: [{ text: "Create", type: "submit" }],
+        buttons: [{ text: 'Create', type: 'submit' }],
         open: function(){
             $(this).unbind('submit').submit(function() {
                 var name = $(this).find('#new-style-name').val();
                 if (name) {
-                    list.select(list.create(defaultStyle, name));
-                    $(this).dialog("close");
+                    list.select(list.create(defaultStyle, name), app.map.animationLoop);
+                    $(this).dialog('close');
                 }
                 return false;
             });
         },
         close: function() {
-            $(this).find('#new-style-name').val("");
+            $(this).find('#new-style-name').val('');
         }
     });
 
     $('#add-style').click(function() {
-        $("#new-style-template").dialog("open");
+        $('#new-style-template').dialog('open');
     });
 
     var list = new StyleList();
@@ -85,15 +85,15 @@ App.prototype._setupStyleDropdown = function() {
     });
     list.on('load', function() {
         if (!list.active) {
-            $("#new-style-template").dialog("open");
+            $('#new-style-template').dialog('open');
         } else {
-            list.select(list.active);
+            list.select(list.active, app.map.animationLoop);
         }
     });
 
     $(dropdown)
         .on('item:select', function(e, name) {
-            list.select(name);
+            list.select(name, app.map.animationLoop);
         })
         .on('item:remove', function(e, name) {
             list.remove(name);
@@ -103,38 +103,41 @@ App.prototype._setupStyleDropdown = function() {
 App.prototype._setupMap = function() {
     var app = this;
 
-    globalMap = this.map = new llmr.Map({
+    window.globalMap = this.map = new llmr.Map({
         container: document.getElementById('map'),
-        layers: [{
+        datasources: {
+            'streets': {
             type: 'vector',
-            id: 'streets',
             urls: ['/gl/tiles/{z}-{x}-{y}.vector.pbf'],
             zooms: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-        }],
+        }},
         maxZoom: 20,
         zoom: 15,
         lat: 38.912753,
         lon: -77.032194,
         rotation: 0,
         hash: true,
-        style: {}
+        style: {
+            buckets: {},
+            structure: []
+        }
     });
 
-    this.map.layers.forEach(function(layer) {
-        app._setupLayerEvents(layer);
-    });
+    for (var id in this.map.datasources) {
+        app._setupLayerEvents(this.map.datasources[id]);
+    }
 
     // Also add event handlers to newly added layers
     this.map.on('layer.add', function(layer) {
         app._setupLayerEvents(layer);
     });
 
-    this.map.on('click', function(x, y) {
-        app.map.featuresAt(x, y, { bucket: "__xray__/point/poi_label" }, function(err, features) {
-            if (err) throw err;
-            console.warn(features.map(function(feature) { return JSON.stringify(feature); }));
-        });
-    });
+    // this.map.on('click', function(x, y) {
+    //     app.map.featuresAt(x, y, { bucket: "__xray__/point/poi_label" }, function(err, features) {
+    //         if (err) throw err;
+    //         console.warn(features.map(function(feature) { return JSON.stringify(feature); }));
+    //     });
+    // });
 
 
     this.tooltip = {
@@ -145,7 +148,7 @@ App.prototype._setupMap = function() {
     };
 
     this.map.on('hover', function(x, y) {
-        app.map.featuresAt(x, y, { radius: 8, type: "point" }, function(err, features) {
+        app.map.featuresAt(x, y, { radius: 8, type: 'point' }, function(err, features) {
             if (err) throw err;
 
             var feature = features[0];
@@ -172,7 +175,7 @@ App.prototype._setupMap = function() {
                 var height = app.tooltip.root.height();
                 app.tooltip.root.css({ left: (x + 5) + 'px', top: (y - height / 2) + 'px' });
             } else {
-                app.tooltip.root.removeClass("visible");
+                app.tooltip.root.removeClass('visible');
             }
         });
     });
@@ -182,7 +185,7 @@ App.prototype._setupMap = function() {
             if (err) throw err;
 
             var views = app.layerViews.filter(function(view) {
-                return buckets.indexOf(view.layer.bucket) >= 0;
+                return buckets.indexOf(view.bucket_name) >= 0;
             });
 
             if (views.length) {
@@ -200,7 +203,6 @@ App.prototype._setupMap = function() {
             app.layerViews.forEach(function(view) {
                 view.highlightSidebar(views.indexOf(view) >= 0);
             });
-            // console.warn(buckets);
         });
     });
 
@@ -237,20 +239,27 @@ App.prototype._setupLayers = function() {
     var app = this;
     var root = $('#layers');
     root.sortable({
-        axis: "y",
-        items: ".layer:not(.background)",
-        handle: ".handle-icon",
-        cursor: "-webkit-grabbing",
+        axis: 'y',
+        items: '.layer:not(.background)',
+        handle: '.handle-icon',
+        cursor: '-webkit-grabbing',
         change: function(e, ui) {
             var placeholder = ui.placeholder[0];
             var item = ui.item[0];
 
             var order = [];
-            root.find(root.sortable("option", "items")).each(function(i, layer) {
+            root.find(root.sortable('option', 'items')).each(function(i, layer) {
                 if (layer == item) return;
-                order.push($(layer == placeholder ? item : layer).attr('data-id'));
+                order.push($(layer == placeholder ? item : layer).attr('data-name'));
             });
-            app.style.setLayerOrder(order);
+
+            // Sort the structure by its position in the order array.
+            app.style.stylesheet.structure.sort(function(a, b) {
+                return order.indexOf(a.name) - order.indexOf(b.name);
+            });
+
+            app.style.fire('change:structure');
+            app.style.cascade();
         }
     });
 };
@@ -267,7 +276,7 @@ App.prototype._setupAddData = function() {
         $('#data-sidebar').find('.expanded').removeClass('expanded');
     });
     $('#data-sidebar .close-sidebar').click(function() {
-        app.style.highlight(null, null);
+        // app.style.highlight(null, null);
         $('.sidebar').removeClass('visible').filter('#layer-sidebar').addClass('visible');
     });
 
@@ -293,16 +302,36 @@ App.prototype._setupAddData = function() {
                 alert("You must enter a name");
                 return false;
             }
-            if (app.style.buckets[data.name]) {
+
+            if (app.style.stylesheet.buckets[data.name]) {
                 alert("This name is already taken");
                 return false;
             }
 
-            data.bucket = app.style.addBucket(data.name, data.bucket);
-            data.layer = app.style.addLayer(data.layer);
+            // Hardcode bucket to the streets datasource
+            data.bucket.datasource = 'streets';
 
+            // add the new bucket
+            app.style.stylesheet.buckets[data.name] = data.bucket;
+
+            // // add a new layer to the structure
+            app.style.stylesheet.structure.push({
+                name: data.name,
+                bucket: data.name
+            });
+
+            // Add a new style to the default class.
+            var defaultClass = app.style.getDefaultClass();
+            defaultClass.layers[data.name] = data.layer;
+
+            app.style.fire('change:buckets');
+            app.style.fire('change:structure');
+            // app.style.fire('change');
+            app.style.cascade();
+
+            // Add new UI
             $('#data-sidebar .close-sidebar').click();
-            var view = app.createLayerView(data.layer, data.bucket);
+            var view = app.createLayerView(data.name, data.name);
             $('#layers').append(view.root);
             view.activate(data.bucket.type == 'point' ? 'symbol' : 'color');
             app.layerViews.push(view);
@@ -312,21 +341,22 @@ App.prototype._setupAddData = function() {
     });
 
     this.filter.on('selection', function() {
-        if (!app.style) return;
+    //     if (!app.style) return;
 
         var data = app.getDataSelection();
         if (data) {
-            data.layer.pulsating = 1000;
-            data.layer.bucket = '__highlight__';
-            data.layer.color = [1, 0, 0, 0.75];
-            data.layer.width = 2;
-            data.layer = new llmr.StyleLayer(data.layer, app.style);
-            app.style.highlight(data.layer, data.bucket);
+    //         data.layer.pulsating = 1000;
+    //         data.layer.bucket = '__highlight__';
+    //         data.layer.color = [1, 0, 0, 0.75];
+    //         data.layer.width = 2;
+    //         data.layer = new llmr.StyleLayer(data.layer, app.style);
+    //         app.style.highlight(data.layer, data.bucket);
 
             $('#add-data-name').attr('placeholder', (data.bucket.value || [data.bucket.layer]).join('+'));
-        } else {
-            app.style.highlight(null, null);
         }
+         // else {
+    //         app.style.highlight(null, null);
+    //     }
     });
 };
 
@@ -340,7 +370,7 @@ App.prototype.getDataSelection = function() {
     if (!bucket || !type) return;
 
     bucket.type = type;
-    var layer = { bucket: name };
+    var layer = {};
     switch (bucket.type) {
         case 'fill': layer.color = '#FF0000'; layer.antialias = true; break;
         case 'line': layer.color = '#00FF00'; layer.width = ["stops"]; break;
@@ -363,39 +393,43 @@ App.prototype.setStyle = function(style) {
     $('#layers').empty();
 
     if (style) {
-        // Create X-Ray composite group
-        this.xRayLayer = new llmr.StyleLayer({
-            type: "composited",
-            opacity: 0,
-            layers: []
-        }, style);
-        style.temporaryLayers.push(this.xRayLayer);
-
-        // Add the background to the X-Ray layer.
-        style.temporaryBuckets['__xray__/background'] = { type: 'background' };
-        this.xRayLayer.layers.push(new llmr.StyleLayer({ bucket: '__xray__/background', color: 'black' }, style));
-
-        this.map.switchStyle(style);
+        this.map.setStyle(style);
 
         // Background layer
-        var background_layer = new llmr.StyleLayer({ color: style.background.hex() }, style);
-        background_layer.on('change', function() {
-            app.style.setBackgroundColor(background_layer.data.color);
-        });
-
-
-        var background = this.createLayerView(background_layer, { type: 'background' });
+        var background = this.createLayerView('background', 'background');
         $('#layers').append(background.root);
         this.backgroundView = background;
 
         // Actual layers
-        for (var i = 0; i < style.layers.length; i++) {
-            var layer = style.layers[i];
-            var bucket = style.buckets[layer.bucket];
-            var view = this.createLayerView(layer, bucket);
+        for (var i = 0; i < style.stylesheet.structure.length; i++) {
+            var structure = style.stylesheet.structure[i];
+            var view = this.createLayerView(structure.name, structure.bucket, style);
             $('#layers').append(view.root);
             this.layerViews.push(view);
         }
+
+
+        // create x-ray composite group
+        this.xRayLayer = {
+            'name': '__xray__',
+            'layers': []
+        };
+        this.style.stylesheet.structure.push(this.xRayLayer);
+
+        // create x-ray style
+        this.style.getDefaultClass().layers.__xray__ = {
+            'type': 'composited',
+            'opacity': +$('#xray').val()
+        };
+
+        // Add the background to the X-Ray layer.
+        this.style.getDefaultClass().layers['__xray__/background'] = {
+            color: 'black'
+        };
+        this.xRayLayer.layers.push({
+            'name': '__xray__/background',
+            'bucket': 'background'
+        });
     }
 };
 
@@ -427,61 +461,62 @@ App.prototype.updateSprite = function() {
 App.prototype.updateXRay = function(stats) {
     var dirty = false;
 
-    if (!this.style) {
-        return;
-    }
-
     for (var bucket_type in stats) {
         for (var layer_name in stats[bucket_type]) {
             var bucket_name = '__xray__/' + bucket_type + '/' + layer_name;
-
-            if (!this.style.temporaryBuckets[bucket_name]) {
-                var bucket = { type: bucket_type, layer: layer_name };
-                var layer = { bucket: bucket_name };
+            if (!this.style.stylesheet.buckets[bucket_name]) {
+                var bucket = { type: bucket_type, layer: layer_name, datasource: 'streets' };
+                var structure = { name: bucket_name, bucket: bucket_name };
+                var layerStyle = {};
                 switch (bucket.type) {
-                    case 'fill': layer.color = 'hsla(139, 100%, 40%, 0.2)'; layer.antialias = true; break;
-                    case 'line': layer.color = 'hsla(139, 100%, 40%, 0.2)'; layer.width = ["stops", {z:0,val:1}, {z:14,val:2}, {z:20,val:16}]; break;
-                    case 'point': layer.image = 'marker'; layer.imageSize = 12; layer.invert = true; layer.color = 'hsla(139, 100%, 40%, 0.5)'; break;
+                    case 'fill': layerStyle.color = 'hsla(139, 100%, 40%, 0.2)'; layerStyle.antialias = true; break;
+                    case 'line': layerStyle.color = 'hsla(139, 100%, 40%, 0.2)'; layerStyle.width = ['stops', {z:0,val:1}, {z:14,val:2}, {z:20,val:16}]; break;
+                    case 'point': layerStyle.image = 'marker'; layerStyle.imageSize = 12; layerStyle.invert = true; layerStyle.color = 'hsla(139, 100%, 40%, 0.5)'; break;
                 }
 
-                this.style.temporaryBuckets[bucket_name] = bucket;
-                this.xRayLayer.layers.push(new llmr.StyleLayer(layer, this.style));
+                this.style.stylesheet.buckets[bucket_name] = bucket;
+                this.style.getDefaultClass().layers[bucket_name] = layerStyle;
+                this.xRayLayer.layers.push(structure);
                 dirty = true;
             }
         }
     }
 
     if (dirty) {
-        this.style.fire('buckets');
-        this.style.fire('change');
+        this.style.fire('change:buckets');
+        this.style.fire('change:structure');
+        this.style.restructure();
+        this.style.cascade();
     }
 };
 
 App.prototype.updateStats = function(stats) {
-    this.filter.update(stats);
+    if (this.filter) {
+        this.filter.update(stats);
+    }
 
     this.updateXRay(stats);
-
     this.layerViews.forEach(function(view) {
         var count = 0;
-        var info = stats[view.bucket.type][view.bucket.layer];
+        var bucket = view.getBucket();
+        var info = stats[bucket.type][bucket.layer];
 
         if (!info) {
             view.setCount(0);
             return;
         }
 
-        if (view.bucket.field) {
+        if (bucket.field) {
             // Count the selected fields
-            var field = info[view.bucket.field];
+            var field = info[bucket.field];
             if (!field) {
                 count = 0;
-            } else if (Array.isArray(view.bucket.value)) {
-                for (var i = 0; i < view.bucket.value.length; i++) {
-                    count += field[view.bucket.value[i]] || 0;
+            } else if (Array.isArray(bucket.value)) {
+                for (var i = 0; i < bucket.value.length; i++) {
+                    count += field[bucket.value[i]] || 0;
                 }
             } else {
-                count = field[view.bucket.value] || 0;
+                count = field[bucket.value] || 0;
             }
 
         } else {
@@ -491,4 +526,4 @@ App.prototype.updateStats = function(stats) {
 
         view.setCount(count);
     });
-}
+};
