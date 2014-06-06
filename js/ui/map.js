@@ -374,7 +374,7 @@ util.extend(Map.prototype, {
             this._tilesDirty = false;
         }
 
-        this._renderGroups(this.style.layerGroups);
+        this._renderLayers(this.style.stylesheet.layers);
 
         var bgColor = this.style.computed.background && this.style.computed.background['fill-color'];
         if (bgColor) {
@@ -391,34 +391,27 @@ util.extend(Map.prototype, {
         return this;
     },
 
-    _renderGroups: function(groups, name) {
-
-        var i, len, group, source, k;
-
-        // Render all dependencies (composited layers) to textures
-        for (i = 0, len = groups.length; i < len; i++) {
-            group = groups[i];
-
-            for (k in group.dependencies) {
-                this._renderGroups(group.dependencies[k], k);
-            }
+    _renderLayers: function(layers, name) {
+        this.painter.bindRenderTexture(name, true);
+        for (var i = layers.length - 1; i >= 0; i--) {
+            this._renderLayer(layers[i], name);
         }
+    },
 
-        // attach render destination. if no name, main canvas.
-        this.painter.bindRenderTexture(name);
+    _renderLayer: function(layer, name) {
+        this.painter.clearStencil();
 
-        // Render the groups
-        for (i = 0, len = groups.length; i < len; i++) {
-            group = groups[i];
-            source = this.sources[group.source];
+        if (layer.bucket) {
+            var buckets = this.style.stylesheet.buckets;
+            var bucket = buckets[layer.bucket];
+            var source = bucket && this.sources[bucket.filter.source];
+            if (source) source.render([layer]);
 
-            if (source) {
-                this.painter.clearStencil();
-                source.render(group);
-
-            } else if (group.composited) {
-                this.painter.draw(undefined, this.style, group, {});
-            }
+        } else if (layer.layers) {
+            this._renderLayers(layer.layers, layer.id);
+            this.painter.bindRenderTexture(name);
+            this.painter.draw(undefined, this.style, [layer], {});
+            this.painter.freeRenderTexture(layer.id);
         }
     },
 

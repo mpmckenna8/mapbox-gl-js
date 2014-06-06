@@ -217,7 +217,7 @@ GLPainter.prototype.drawClippingMask = function() {
 };
 
 // Set up a texture that can be drawn into
-GLPainter.prototype.bindRenderTexture = function(name) {
+GLPainter.prototype.bindRenderTexture = function(name, clearColor) {
     var gl = this.gl;
 
     if (name) {
@@ -256,7 +256,7 @@ GLPainter.prototype.bindRenderTexture = function(name) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
-    this.clearColor();
+    if (clearColor) this.clearColor();
 };
 
 GLPainter.prototype.freeRenderTexture = function(name) {

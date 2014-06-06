@@ -2,7 +2,7 @@
 var map = new llmr.Map({
     container: 'map',
     sources: {
-        "osm-bright": {
+        "mapbox streets": {
             type: 'vector',
             url: 'http://api.tiles.mapbox.com/v3/mapbox.mapbox-streets-v4/{z}/{x}/{y}.vector.pbf',
             glyphs: 'http://mapbox.s3.amazonaws.com/gl-glyphs-256/{fontstack}/{range}.pbf',
