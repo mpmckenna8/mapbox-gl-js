@@ -66,7 +66,7 @@ util.extend(Source.prototype, {
         this._updateTiles();
     },
 
-    render: function(layers) {
+    render: function(layer) {
         // Iteratively paint every tile.
         if (!this.enabled) return;
         var order = Object.keys(this.tiles);
@@ -75,7 +75,7 @@ util.extend(Source.prototype, {
             var id = order[i];
             var tile = this.tiles[id];
             if (tile.loaded && !this.coveredTiles[id]) {
-                this._renderTile(tile, id, layers);
+                this._renderTile(tile, id, layer);
             }
         }
     },
@@ -185,15 +185,15 @@ util.extend(Source.prototype, {
         }
     },
 
-    // Given a tile of data, its id, and a style layers, render the tile to the canvas
-    _renderTile: function(tile, id, layers) {
+    // Given a tile of data, its id, and a style layer, render the tile to the canvas
+    _renderTile: function(tile, id, layer) {
         var pos = Tile.fromID(id);
         var z = pos.z, x = pos.x, y = pos.y, w = pos.w;
         x += w * (1 << z);
 
         tile.calculateMatrices(z, x, y, this.map.transform, this.painter);
 
-        this.painter.draw(tile, this.map.style, layers, {
+        this.painter.draw(tile, this.map.style, layer, {
             z: z, x: x, y: y,
             debug: this.map.debug,
             antialiasing: this.map.antialiasing,

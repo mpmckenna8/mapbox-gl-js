@@ -405,12 +405,12 @@ util.extend(Map.prototype, {
             var buckets = this.style.stylesheet.buckets;
             var bucket = buckets[layer.bucket];
             var source = bucket && this.sources[bucket.filter.source];
-            if (source) source.render([layer]);
+            if (source) source.render(layer);
 
         } else if (layer.layers) {
             this._renderLayers(layer.layers, layer.id);
             this.painter.bindRenderTexture(name);
-            this.painter.draw(undefined, this.style, [layer], {});
+            this.painter.draw(undefined, this.style, layer, {});
             this.painter.freeRenderTexture(layer.id);
         }
     },

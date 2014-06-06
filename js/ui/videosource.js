@@ -99,11 +99,9 @@ VideoSource.prototype.update = function() {
     // noop
 };
 
-VideoSource.prototype.render = function(layers) {
+VideoSource.prototype.render = function(layer) {
     if (!this.enabled) return;
     if (this.video.readyState < 2) return; // not enough data for current position
-
-    var layer = layers[0];
 
     var bucket = {
         indices: true,

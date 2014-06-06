@@ -268,7 +268,7 @@ GLPainter.prototype.freeRenderTexture = function(name) {
  * Draw a new tile to the context, assuming that the viewport is
  * already correctly set.
  */
-GLPainter.prototype.draw = function glPainterDraw(tile, style, layers, params) {
+GLPainter.prototype.draw = function glPainterDraw(tile, style, layer, params) {
     this.tile = tile;
 
     // false when drawing a group of composited layers
@@ -277,15 +277,9 @@ GLPainter.prototype.draw = function glPainterDraw(tile, style, layers, params) {
         this.drawClippingMask();
     }
 
-    if (!Array.isArray(layers)) console.warn('Layers is not an array');
-
     drawText.frame(this);
 
-    // Draw layers front-to-back.
-    // Layers are already in reverse order from style.restructure()
-    for (var i = 0, len = layers.length; i < len; i++) {
-        this.applyStyle(layers[i], style, tile && tile.buckets, params);
-    }
+    this.applyStyle(layer, style, tile && tile.buckets, params);
 
     if (params.debug) {
         drawDebug(this.gl, this, tile, params);
