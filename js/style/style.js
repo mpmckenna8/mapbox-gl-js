@@ -86,59 +86,24 @@ Style.prototype.recalculate = function(z) {
     var buckets = this.stylesheet.buckets;
     var sources = this.sources = {};
 
-    this.layerGroups = groupLayers(this.stylesheet.layers);
+    addSources(this.stylesheet.layers);
 
-    // Split the layers into groups of consecutive layers with the same datasource
-    // For each group calculate its dependencies. Its dependencies are composited
-    // layers that need to be rendered into textures before
-    function groupLayers(layers) {
-
-        var i = layers.length - 1;
-        var groups = [];
-
-        // loop over layers top down
-        while (i >= 0) {
-
+    function addSources(layers) {
+        for (var i = 0; i < layers.length; i++) {
             var layer = layers[i];
-            var bucket = buckets[layer.bucket];
-            var source = bucket && bucket.filter.source;
+            var style = layerValues[layer.id];
 
-            var group = [];
-            group.dependencies = {};
-            group.source = source;
-            group.composited = layer.layers;
+            if (!style || style.hidden) continue;
 
-            // low over layers top down until you reach one from a different datasource
-            while (i >= 0) {
-                layer = layers[i];
-                bucket = buckets[layer.bucket];
-                source = bucket && bucket.filter.source;
-
-                var style = layerValues[layer.id];
-                if (!style || style.hidden) {
-                    i--;
-                    continue;
-                }
-
-                // if the current layer is in a different source
-                if (source !== group.source && layer.id !== 'background') break;
-
-                if (layer.layers) {
-                    // TODO if composited layer is opaque just inline the layers
-                    group.dependencies[layer.id] = groupLayers(layer.layers);
-
-                } else {
-                    // mark source as used so that tiles are downloaded
-                    if (source) sources[source] = true;
-                }
-
-                group.push(layer);
-                i--;
+            if (layer.layers) {
+                addSources(layer.layers);
+            } else {
+                var bucket = buckets[layer.bucket];
+                var source = bucket && bucket.filter.source;
+                sources[source] = true;
             }
 
-            groups.push(group);
         }
-        return groups;
     }
 
     this.computed = layerValues;
