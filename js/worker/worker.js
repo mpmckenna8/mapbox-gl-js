@@ -20,7 +20,7 @@ self['set buckets'] = function(data) {
     var buckets = WorkerTile.buckets = data;
     for (var i = 0; i < buckets.length; i++) {
         var bucket = buckets[i];
-        bucket.compare = bucketFilter(bucket.filter, ['$type']);
+        bucket.compare = bucketFilter(bucket.filter);
         bucket.render = new RenderProperties[bucket.render.type](bucket.render);
     }
 };
@@ -41,8 +41,8 @@ self['load tile'] = function(params, callback) {
  *
  * @param {string} url
  */
-self['abort tile'] = function(id) {
-    WorkerTile.cancel(id);
+self['abort tile'] = function(params) {
+    WorkerTile.cancel(params.id, params.source);
 };
 
 self['remove tile'] = function(id, source) {
