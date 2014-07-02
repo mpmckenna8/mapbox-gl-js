@@ -1,9 +1,0 @@
-api: https://hey.mapbox.com
-url: https://hey.mapbox.com
-permalink: /mapbox-gl-js
-baseurl: /mapbox-gl-js
-highlighter: pygments
-excerpt_separator: ""
-version: 0.0.15
-rdiscount:
-  extensions: [smart]
