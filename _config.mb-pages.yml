@@ -1,0 +1,9 @@
+api: https://www.mapbox.com
+url: https://www.mapbox.com
+permalink: ""
+baseurl: ""
+highlighter: pygments
+excerpt_separator: ""
+version: 0.0.15
+rdiscount:
+  extensions: [smart]

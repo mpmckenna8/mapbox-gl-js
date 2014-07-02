@@ -1,4 +1,4 @@
-llmr demos
+mapbox-gl-js
 ----------
-Demos.
+API documentation, examples and demos.
 
