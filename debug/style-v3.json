@@ -28,7 +28,8 @@
     },
     "satellite": {
       "type": "raster",
-      "url": "mapbox://aibram.map-vlob92uz"
+      "url": "mapbox://mapbox.satellite",
+      "tileSize": 256
     }
   },
   "layers": [{

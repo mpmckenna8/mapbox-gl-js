@@ -1,0 +1,128 @@
+---
+layout: gl-example
+category: examples
+title: Mapbox GL JS Examples
+exampletitle: Embed a video
+examplesubtitle: Embed a live video in a map
+permalink: /examples/video
+navigation:
+  - title: Embed a video
+    url: /examples/video
+---
+
+<div class='js-replace-token'>
+{% highlight html %}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8 />
+<title>Embed a video</title>
+<meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+<script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.1.0/mapbox-gl.js'></script>
+<style>
+  body { margin:0; padding:0; }
+  #map { position:absolute; top:0; bottom:0; width:100%; }
+</style>
+</head>
+<body>
+<div id='map'></div>
+<script>
+var map;
+mapboxgl.accessToken = '<your access token here>';
+var style = {
+  "version": 4,
+  "sources": {
+    "satellite": {
+      "type": "raster",
+      "url": "mapbox://mapbox.satellite"
+    },
+    "video": {
+      "type": "video",
+      "url": ["https://www.mapbox.com/videos/baltimore-smoke.mp4", "https://mapbox.com/videos/baltimore-smoke.webm"],
+      "coordinates": [
+        [39.18579907229748, -76.54335737228394],
+        [39.1838364847587, -76.52803659439087],
+        [39.17683392507606, -76.5295386314392],
+        [39.17876344106642, -76.54520273208618]
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "sat",
+      "source": "satellite",
+      "type": "raster",
+      "style": {
+        "raster-saturation": -1,
+        "raster-contrast": 0.2,
+        "raster-brightness": [-0.05, 1.2]
+      }
+    },
+    {
+      "id": "vid",
+      "source": "video",
+      "type": "raster",
+      "style": {}
+    }
+  ]
+};
+  
+var map = new mapboxgl.Map({
+    container: 'glmap',
+    style: style,
+    center: [39.18219146972959, -76.53767428365573],
+    zoom: 15.2
+});
+</script>
+</body>
+</html>
+{% endhighlight %}
+</div>
+
+<script>
+
+var style = {
+  "version": 4,
+  "sources": {
+    "satellite": {
+      "type": "raster",
+      "url": "mapbox://mapbox.satellite"
+    },
+    "video": {
+      "type": "video",
+      "url": ["https://www.mapbox.com/videos/baltimore-smoke.mp4", "https://mapbox.com/videos/baltimore-smoke.webm"],
+      "coordinates": [
+        [39.18579907229748, -76.54335737228394],
+        [39.1838364847587, -76.52803659439087],
+        [39.17683392507606, -76.5295386314392],
+        [39.17876344106642, -76.54520273208618]
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "sat",
+      "source": "satellite",
+      "type": "raster",
+      "style": {
+        "raster-saturation": -1,
+        "raster-contrast": 0.2,
+        "raster-brightness": [-0.05, 1.2]
+      }
+    },
+    {
+      "id": "vid",
+      "source": "video",
+      "type": "raster",
+      "style": {}
+    }
+  ]
+};
+  
+var map = new mapboxgl.Map({
+    container: 'glmap',
+    style: style,
+    center: [39.18219146972959, -76.53767428365573],
+    zoom: 15.2
+});
+</script>
