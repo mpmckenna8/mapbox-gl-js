@@ -48,6 +48,8 @@ StyleDeclaration.prototype.parseValue = function(value, type, values, constants)
         return String(value);
     } else if (type === 'array') {
         return parseNumberArray(value);
+    } else if (type === 'dasharray') {
+        return parseDashArray(value);
     } else if (type === 'enum' && Array.isArray(values)) {
         return values.indexOf(value) >= 0 ? value : undefined;
     } else {
@@ -71,6 +73,55 @@ function parseNumberArray(array) {
         }
         return result;
     };
+}
+
+function parseDashArray(array) {
+    var dashFn = parseNumberArray(array);
+    var stops = [];
+
+    var minzoom = 0;
+    var maxzoom = 25;
+
+    // assumes the total dasharray length is always increasing,
+    // but never at a rate greater than the scale (2^n)
+    var k = minzoom + 1;
+    var stop = [minzoom, dashFn(minzoom)];
+    stops.push(stop);
+    while (k < maxzoom) {
+        stop = bisectDash(dashFn, stop, k, k + 1);
+        stops.push(stop);
+        k = stop[0] + 1;
+    }
+
+    return stopsFn({ stops: stops, base: 1, dasharray: true });
+}
+
+var epsilon = 1 / 1000;
+function bisectDash(dashFn, previous, low, high) {
+    var previousLength = dashLength(previous[1]);
+    var z = (low + high) / 2;
+    var dasharray = dashFn(z);
+    var length = dashLength(dasharray);
+    var scale = Math.pow(2, z - previous[0] - 1);
+    var space = scale * previousLength;
+    
+    if (Math.abs(space - length) < epsilon) {
+        return [z, dasharray];
+    } else if (space > length) {
+        return bisectDash(dashFn, previous, low, z);
+    } else if (space < length) {
+        return bisectDash(dashFn, previous, z, high);
+    } else {
+        throw('asdf');
+    }
+}
+
+function dashLength(array) {
+    var len = 0;
+    for (var i = 0; i < array.length; i++) {
+        len += array[i];
+    }
+    return len;
 }
 
 var colorCache = {};
@@ -120,7 +171,17 @@ function stopsFn(params, color) {
                 t = (Math.pow(base, zoomProgress) - 1) / (Math.pow(base, zoomDiff) - 1);
             }
             if (color) return prepareColor(interpColor(low[2], high[2], t));
-            else return util.interp(low[1], high[1], t);
+            else if (low[1].length) {
+                var scale = Math.pow(2, z - low[0]);
+                var space = dashLength(low[1]) * scale;
+                var array = interpArray(low[1], high[1], t);
+                var factor = space / dashLength(array);
+                //var extra = space - dashLength(array);
+                //array[1] += extra;
+                array[0] *= factor;
+                array[1] *= factor;
+                return array;
+            } else return util.interp(low[1], high[1], t);
 
         } else if (low) {
             if (color) return prepareColor(low[2]);
@@ -148,4 +209,12 @@ function interpColor(from, to, t) {
         util.interp(from[2], to[2], t),
         util.interp(from[3], to[3], t)
     ];
+}
+
+function interpArray(from, to, t) {
+    var result = [];
+    for (var i = 0; i < from.length; i++) {
+        result.push(util.interp(from[i], to[i], t));
+    }
+    return result;
 }
