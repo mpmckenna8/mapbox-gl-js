@@ -8,14 +8,11 @@ env:
   - secure: N/T7akbp6kz0kPGW2F8lrt05Q1LgfRI5Yft0Q/a3QGD2oSVNyY1IyqQav3zDn9Skgk9EMc34NaQFtlz2o3Q/jUUUPY+53G01SBMGM7uVC9UHzxtGY0HzSzHG0OFd93/2r4Jr2GTk8RqOxTDjPn3aQoBjcSx8M8xoRoNIs5IwHbM=
   - secure: byXyXwaxH7tJO9LxrGko/JUlJ6IFyhtG3X1+EtdEo1kgKimfdb56qkfY5mIjVyTwkw315hd96n8ExRFJerL3R3RqSaysF+/vXD81HMieeXqswGf3Q4pt+1VjndRHIBSClu7uEYIF6DK8yukII1LDHxIATLUx875YY1JWvse1WVs=
 before_install:
-- sudo apt-get -y install python-pip libglew-dev
-- sudo pip install awscli
+- sudo apt-get -y install libglew-dev gdb
+install:
+- npm install --debug
 before_script:
 - sh -e /etc/init.d/xvfb start
 - export DISPLAY=:99.0
 script:
-- npm test
-- npm run test-remote
-- (cd ./node_modules/mapbox-gl-test-suite/ && (./bin/compare_images.js; ./bin/deploy_results.sh))
-- aws s3 cp --acl public-read dist/mapbox-gl.js s3://mapbox/mapbox-gl-js/${TRAVIS_BRANCH}/mapbox-gl.js
-- aws s3 cp --acl public-read dist/mapbox-gl-dev.js s3://mapbox/mapbox-gl-js/${TRAVIS_BRANCH}/mapbox-gl-dev.js
+- cat script.gdb | sudo gdb --args `which node` test/render.test.js
